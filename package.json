@@ -1,0 +1,16 @@
+{
+  "name": "nlw-heat",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "private": true,
+  "workspaces": {
+    "packages": [
+      "packages/*"
+    ]
+  },
+  "author": {
+    "name": "João Amadeu",
+    "email": "jmamadeu2000@gmail.com"
+  }
+}
