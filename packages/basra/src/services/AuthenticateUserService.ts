@@ -1,14 +1,23 @@
 import axios from 'axios';
-import { response } from 'express';
+import { prismaClient } from '../prisma';
+import { sign } from 'jsonwebtoken';
+interface IAccessTokenResponse {
+  access_token: string;
+}
+
+interface IUserResponse {
+  avatar_url: string;
+  login: string;
+  id: number;
+  name: string;
+}
 
 class AuthenticateUserService {
   async execute(code: string) {
     const githubAccessTokenURL = 'https://github.com/login/oauth/access_token';
 
-    const githubAccessTokenResponse = await axios.post(
-      githubAccessTokenURL,
-      null,
-      {
+    const { data: access_tokenResponse } =
+      await axios.post<IAccessTokenResponse>(githubAccessTokenURL, null, {
         params: {
           client_id: process.env.GITHUB_CLIENT_ID,
           client_secret: process.env.GITHUB_CLIENT_SECRET,
@@ -17,10 +26,55 @@ class AuthenticateUserService {
         headers: {
           Accept: 'application/json',
         },
+      });
+
+    const response = await axios.get<IUserResponse>(
+      'https://api.github.com/user',
+      {
+        headers: {
+          authorization: `Bearer ${access_tokenResponse.access_token}`,
+        },
       }
     );
 
-    return githubAccessTokenResponse.data;
+    const { login, id: github_id, avatar_url, name } = response.data;
+
+    let user = await prismaClient.user.findFirst({
+      where: {
+        github_id,
+      },
+    });
+
+    if (!user) {
+      await prismaClient.user.create({
+        data: {
+          avatar_url,
+          name,
+          login,
+          github_id,
+        },
+      });
+    }
+
+    const token = sign(
+      {
+        user: {
+          name: user?.name,
+          avatar_url: user?.avatar_url,
+          id: user?.id,
+        },
+      },
+      process.env.JWT_SECRET as string,
+      {
+        subject: user?.id,
+        expiresIn: '1d',
+      }
+    );
+
+    return {
+      token,
+      user,
+    };
   }
 }
 
